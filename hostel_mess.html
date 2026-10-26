@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hostel Mess Management System</title>
+<style>
+:root{--g:#14532d;--g2:#1f7a45;--soft:#e6f2ea;--ink:#1c2420;--mu:#6b7a72;--ln:#e3e8e5;--bg:#f3f5f4}
+*{box-sizing:border-box}body{margin:0;font:15px/1.45 system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+button,input,select,textarea{font:inherit;padding:8px 10px;border:1px solid var(--ln);border-radius:8px;background:#fff;color:var(--ink)}
+button{cursor:pointer;background:var(--g);color:#fff;border:0;font-weight:600}button.l{background:#fff;color:var(--ink);border:1px solid var(--ln)}button.d{background:#b42318}button.s{padding:4px 9px;font-size:.82rem}
+#side{position:fixed;inset:0 auto 0 0;width:230px;background:#0f1f17;padding:14px 10px;overflow:auto;transition:transform .2s;z-index:5}
+#side h2{color:#fff;font-size:1.1rem;margin:4px 10px 16px}#side a{display:block;color:#b9c9bf;padding:9px 12px;border-radius:9px;cursor:pointer;margin-bottom:3px}
+#side a:hover{background:#ffffff14;color:#fff}#side a.on{background:var(--g2);color:#fff}
+#main{margin-left:230px}header{display:flex;align-items:center;gap:12px;background:#fff;border-bottom:1px solid var(--ln);padding:10px 22px;position:sticky;top:0}
+header h1{font-size:1.2rem;margin:0}header .r{margin-left:auto;display:flex;gap:10px;align-items:center}
+#menuBtn{display:none}#c{padding:22px}
+.card{background:#fff;border:1px solid var(--ln);border-radius:14px;box-shadow:0 1px 3px #0f1f1710;padding:16px;margin-bottom:16px;overflow-x:auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}.grid .card{margin:0}
+.num{font-size:1.7rem;font-weight:700}.mu{color:var(--mu)}h3{margin:0 0 10px;font-size:1rem}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--ln);font-size:.9rem;vertical-align:top}th{color:var(--mu)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:end}.row label{display:flex;flex-direction:column;font-size:.8rem;color:var(--mu);gap:3px}
+.b{display:inline-block;padding:2px 9px;border-radius:99px;font-size:.78rem;font-weight:600}.ok{background:#d9f2e2;color:#14532d}.wa{background:#fdf0c9;color:#7a5600}.bad{background:#fbdcd8;color:#8a1f13}
+.bar{display:flex;align-items:center;gap:8px;margin:6px 0}.bar i{display:block;height:12px;background:var(--g2);border-radius:5px}.prog{height:9px;background:var(--soft);border-radius:9px;overflow:hidden}.prog i{display:block;height:100%;background:var(--g2)}
+#login{min-height:100vh;display:grid;place-items:center;background:linear-gradient(160deg,#0f1f17 45%,var(--bg) 45%)}#login .card{width:min(400px,92vw);padding:26px}#login input{width:100%;margin-bottom:10px}
+.msg{position:fixed;right:18px;bottom:18px;background:#0f1f17;color:#fff;padding:10px 16px;border-radius:10px;z-index:9}
+@media(max-width:860px){#side{transform:translateX(-100%)}#side.open{transform:none}#main{margin-left:0}#menuBtn{display:block}#c{padding:14px}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const MEALS=['Breakfast','Lunch','Snacks','Dinner'],DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],KEY='hostelMessHTML_v1';
+const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const today=()=>iso(new Date()),addDays=(s,n)=>{const d=new Date(s+'T00:00:00');d.setDate(d.getDate()+n);return iso(d)};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $=id=>document.getElementById(id), sum=a=>a.reduce((x,y)=>x+y,0), pct=(a,b)=>b?Math.round(a*1000/b)/10:0;
+const rnd=s=>{let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))|0;return Math.abs(Math.sin(h))%1};
+
+const USERS=[{u:'admin',p:'admin123',role:'admin',name:'Warden'},{u:'staff',p:'staff123',role:'staff',name:'Mess Staff'},{u:'student',p:'student123',role:'student',name:'Aarav Reddy',sid:'S001'}];
+const NAV={admin:[['dash','Dashboard'],['students','Students'],['menu','Weekly menu'],['att','Mark attendance'],['fees','Fees'],['comp','Complaints'],['waste','Food waste']],
+ staff:[['dash','Dashboard'],['menu','Weekly menu'],['att','Mark attendance'],['waste','Food waste']],
+ student:[['dash','Dashboard'],['menu','Weekly menu'],['fees','My fees'],['comp','Complaints'],['abs','Planned absences']]};
+
+function seed(){
+  const names=['Aarav Reddy','Ananya Sharma','Rohit Kumar','Sneha Patel','Vikram Singh','Priya Nair','Karthik Rao','Meera Iyer','Arjun Mehta','Divya Menon','Rahul Verma','Pooja Gupta'];
+  const d={students:names.map((n,i)=>({id:'S'+String(i+1).padStart(3,'0'),name:n,dept:['CSE','IT','ECE'][i%3],year:i%4+1,room:'10'+(i%3+1),phone:'90000000'+String(i+10)})),
+   menu:{},att:{},fees:[],comps:[],waste:[],abs:[]};
+  const items=[['Idli, Sambar','Rice, Dal, Aloo fry','Samosa, Tea','Chapati, Paneer curry'],['Poori, Aloo masala','Veg biryani, Raita','Biscuits, Tea','Rice, Chicken curry'],['Upma, Chutney','Rice, Sambar, Beans','Veg puff, Tea','Chapati, Veg kurma']];
+  for(let w=0;w<7;w++){d.menu[w]={};MEALS.forEach((m,i)=>d.menu[w][m]=items[w%3][i])}
+  const rate={Breakfast:.7,Lunch:.88,Snacks:.6,Dinner:.9};
+  for(let k=-7;k<=0;k++){const day=addDays(today(),k);MEALS.forEach(m=>{
+    const ids=d.students.filter(s=>rnd(s.id+day+m)<rate[m]).map(s=>s.id);d.att[day+'|'+m]=ids;
+    const prep=Math.ceil(ids.length*(1.05+rnd('w'+day+m)*.2));d.waste.push({date:day,meal:m,prep,served:ids.length,left:prep-ids.length})})}
+  const mon=today().slice(0,7);
+  d.students.forEach((s,i)=>{const pays=i%3==0?[{a:3000,d:today(),ref:'DEMO-'+s.id}]:i%3==1?[{a:1500,d:today(),ref:'DEMO-'+s.id}]:[];d.fees.push({id:'F'+i,sid:s.id,month:mon,amt:3000,pays})});
+  d.comps=[{id:'C1',sid:'S003',cat:'Food',subj:'Rice undercooked',desc:'Rice at dinner was hard.',status:'Open',resp:'',date:today()},
+           {id:'C2',sid:'S005',cat:'Hygiene',subj:'Dirty plates',desc:'Plates had stains.',status:'In Progress',resp:'Dish-washing is being changed.',date:today()}];
+  return d;
+}
+let D;try{D=JSON.parse(localStorage.getItem('hostelMessHTML_v1'))||seed()}catch(e){D=seed()}
+let U=null;try{U=JSON.parse(sessionStorage.getItem('hmUser'))}catch(e){}
+let page='dash',tmp={date:today(),meal:'Lunch',q:'',month:today().slice(0,7)};
+const save=()=>localStorage.setItem(KEY,JSON.stringify(D));
+function toast(t){const e=document.createElement('div');e.className='msg';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),2600)}
+const stu=id=>D.students.find(s=>s.id===id)||{name:'(removed)'};
+const paid=f=>sum(f.pays.map(p=>p.a)),stat=f=>paid(f)>=f.amt?'PAID':paid(f)>0?'PARTIAL':'PENDING';
+const badge=s=>`<span class="b ${{PAID:'ok',Resolved:'ok',PARTIAL:'wa','In Progress':'wa',PENDING:'bad',Open:'bad'}[s]}">${s}</span>`;
+const bars=(labels,vals,unit='')=>{const mx=Math.max(...vals,1);return labels.map((l,i)=>`<div class="bar"><span style="width:62px" class="mu">${l}</span><i style="width:${vals[i]/mx*60}%"></i><span>${vals[i]}${unit}</span></div>`).join('')};
+function csv(name,rows){const t=rows.map(r=>r.map(c=>{c=String(c);if(/^[=+\-@]/.test(c))c="'"+c;return '"'+c.replace(/"/g,'""')+'"'}).join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'text/csv'}));a.download=name;a.click()}
+const menuOf=(day)=>D.menu[new Date(day+'T00:00:00').getDay()];
+const attCount=(day,m)=>(D.att[day+'|'+m]||[]).length;
+
+function estimate(day,m){
+  const reg=D.students.length,days=[1,2,3,4,5,6,7].map(n=>attCount(addDays(day,-n),m)).filter(n=>n>0);
+  const avg=days.length?sum(days)/days.length:reg,abs=D.abs.filter(a=>a.date===day&&a.meal===m).length;
+  const exp=Math.max(0,Math.round(avg/reg*(reg-abs)));return{reg,abs,avg:Math.round(avg*10)/10,exp,rec:Math.ceil(exp*1.05)};
+}
+
+/* ---------------- pages ---------------- */
+const P={
+dash(){
+  const t=today();let h='';
+  if(U.role==='student'){
+    const s=stu(U.sid),mine=D.fees.filter(f=>f.sid===U.sid),bal=sum(mine.map(f=>f.amt-paid(f)));
+    const meals=Object.entries(D.att).filter(([k,v])=>k.startsWith(t.slice(0,7))&&v.includes(U.sid)).length;
+    h+=`<div class="grid"><div class="card"><div class="num">${meals}</div><span class="mu">Meals this month</span></div><div class="card"><div class="num">Rs. ${bal}</div><span class="mu">Fee balance</span></div><div class="card"><div class="num">${s.room||'-'}</div><span class="mu">Your room</span></div></div>`;
+  }else{
+    const reg=D.students.length,pend=sum(D.fees.map(f=>f.amt-paid(f))),open=D.comps.filter(c=>c.status!=='Resolved').length;
+    const w=D.waste.filter(r=>r.date>addDays(t,-7)),wp=pct(sum(w.map(r=>r.left)),sum(w.map(r=>r.prep)));
+    h+=`<div class="grid"><div class="card"><div class="num">${reg}</div><span class="mu">Students</span></div><div class="card"><div class="num">${sum(MEALS.map(m=>attCount(t,m)))}</div><span class="mu">Meals attended today</span></div>
+    <div class="card"><div class="num">Rs. ${pend}</div><span class="mu">Pending fees</span></div><div class="card"><div class="num">${open}</div><span class="mu">Open complaints</span></div><div class="card"><div class="num">${wp}%</div><span class="mu">Wastage, 7 days (est.)</span></div></div><br>`;
+    h+=`<div class="grid"><div class="card"><h3>Today's attendance</h3>${MEALS.map(m=>`<div>${m} <span class="mu">${attCount(t,m)}/${reg}</span><div class="prog"><i style="width:${pct(attCount(t,m),reg)}%"></i></div></div>`).join('<br>')}</div>
+    <div class="card"><h3>Last 7 days</h3>${bars([6,5,4,3,2,1,0].map(n=>addDays(t,-n).slice(5)),[6,5,4,3,2,1,0].map(n=>sum(MEALS.map(m=>attCount(addDays(t,-n),m)))))}</div></div>`;
+  }
+  const mn=menuOf(t);h+=`<br><div class="card"><h3>Today's menu</h3>${MEALS.map(m=>`<p><b>${m}</b><br><span class="mu">${esc(mn[m]||'Not planned')}</span></p>`).join('')}</div>`;
+  return h;
+},
+students(){
+  const q=tmp.q.toLowerCase(),list=D.students.filter(s=>(s.name+s.id+s.room).toLowerCase().includes(q));
+  return `<div class="card"><h3>Add student</h3><div class="row"><label>Name<input id="n"></label><label>Dept<select id="d"><option>CSE</option><option>IT</option><option>ECE</option><option>MECH</option><option>CIVIL</option></select></label>
+  <label>Year<select id="y"><option>1</option><option>2</option><option>3</option><option>4</option></select></label><label>Room<input id="r" size="6"></label><label>Phone<input id="p"></label><button onclick="addStu()">Add</button></div></div>
+  <div class="card"><div class="row"><input placeholder="Search name, ID or room" value="${esc(tmp.q)}" oninput="tmp.q=this.value;go('students')" id="sq"><button class="l" onclick="csv('students.csv',[['ID','Name','Dept','Year','Room','Phone'],...D.students.map(s=>[s.id,s.name,s.dept,s.year,s.room,s.phone])])">Export CSV</button></div>
+  <table><tr><th>ID</th><th>Name</th><th>Dept/Year</th><th>Room</th><th>Phone</th><th></th></tr>${list.map(s=>`<tr><td>${s.id}</td><td>${esc(s.name)}</td><td>${s.dept}/${s.year}</td><td>${esc(s.room)}</td><td>${esc(s.phone)}</td><td><button class="d s" onclick="delStu('${s.id}')">Remove</button></td></tr>`).join('')||'<tr><td colspan=6 class=mu>No students found.</td></tr>'}</table></div>`;
+},
+menu(){
+  const edit=U.role==='admin';
+  return `<div class="card"><table><tr><th></th>${DAYS.map(d=>`<th>${d}</th>`).join('')}</tr>${MEALS.map(m=>`<tr><th>${m}</th>${DAYS.map((d,i)=>`<td>${esc(D.menu[i][m]||'-')}${edit?`<br><a href="#" onclick="editMenu(${i},'${m}');return false">edit</a>`:''}</td>`).join('')}</tr>`).join('')}</table></div>`;
+},
+att(){
+  const key=tmp.date+'|'+tmp.meal,set=D.att[key]||[];
+  return `<div class="card"><div class="row"><label>Date<input type="date" id="ad" value="${tmp.date}" max="${today()}" onchange="tmp.date=this.value;go('att')"></label>
+  <label>Meal<select id="am" onchange="tmp.meal=this.value;go('att')">${MEALS.map(m=>`<option ${m===tmp.meal?'selected':''}>${m}</option>`).join('')}</select></label></div>
+  <table><tr><th>Present</th><th>Student</th><th>Room</th><th></th></tr>${D.students.map(s=>`<tr><td><input type="checkbox" class="pc" value="${s.id}" ${set.includes(s.id)?'checked':''}></td><td>${esc(s.name)} <span class="mu">${s.id}</span></td><td>${esc(s.room)}</td>
+  <td>${D.abs.some(a=>a.sid===s.id&&a.date===tmp.date&&a.meal===tmp.meal)?'<span class="b wa">Planned absence</span>':''}</td></tr>`).join('')}</table><br><button onclick="saveAtt()">Save attendance</button></div>`;
+},
+fees(){
+  if(U.role==='student'){const mine=D.fees.filter(f=>f.sid===U.sid);
+    return `<div class="card"><table><tr><th>Month</th><th>Billed</th><th>Paid</th><th>Status</th></tr>${mine.map(f=>`<tr><td>${f.month}</td><td>${f.amt}</td><td>${paid(f)}</td><td>${badge(stat(f))}</td></tr>`).join('')||'<tr><td colspan=4 class=mu>No fees yet.</td></tr>'}</table></div>
+    <div class="card"><h3>Payment history</h3><table><tr><th>Date</th><th>Amount</th><th>Reference</th></tr>${mine.flatMap(f=>f.pays).map(p=>`<tr><td>${p.d}</td><td>${p.a}</td><td>${esc(p.ref)}</td></tr>`).join('')||'<tr><td colspan=3 class=mu>None.</td></tr>'}</table></div>`}
+  const rows=D.fees.filter(f=>f.month===tmp.month),b=sum(rows.map(f=>f.amt)),c=sum(rows.map(paid));
+  return `<div class="card"><div class="row"><label>Month<input type="month" value="${tmp.month}" onchange="tmp.month=this.value;go('fees')"></label><label>Fee per student (Rs.)<input id="fa" type="number" min="1" value="3000"></label><button onclick="genFees()">Create fee records</button>
+  <button class="l" onclick="csv('fees-${tmp.month}.csv',[['ID','Name','Billed','Paid','Balance','Status'],...D.fees.filter(f=>f.month==='${tmp.month}').map(f=>[f.sid,stu(f.sid).name,f.amt,paid(f),f.amt-paid(f),stat(f)])])">Export CSV</button></div>
+  <p>Billed <b>Rs. ${b}</b> &nbsp; Collected <b>Rs. ${c}</b> &nbsp; Outstanding <b>Rs. ${b-c}</b> <span class="mu">(payments are simulated)</span></p>
+  <table><tr><th>Student</th><th>Billed</th><th>Paid</th><th>Balance</th><th>Status</th><th></th></tr>${rows.map(f=>`<tr><td>${esc(stu(f.sid).name)}</td><td>${f.amt}</td><td>${paid(f)}</td><td>${f.amt-paid(f)}</td><td>${badge(stat(f))}</td><td>${f.amt>paid(f)?`<button class="s" onclick="pay('${f.id}')">Record payment</button>`:''}</td></tr>`).join('')||'<tr><td colspan=6 class=mu>No fee records for this month.</td></tr>'}</table></div>`;
+},
+comp(){
+  if(U.role==='student'){const mine=D.comps.filter(c=>c.sid===U.sid);
+    return `<div class="card"><h3>New complaint or suggestion</h3><div class="row"><label>Category<select id="cc"><option>Food</option><option>Hygiene</option><option>Menu</option><option>Other</option></select></label><label>Subject<input id="cs"></label></div>
+    <textarea id="cd" rows="3" style="width:100%" placeholder="Describe the issue (at least 10 characters)"></textarea><br><br><button onclick="addComp()">Submit</button></div>
+    ${mine.map(c=>`<div class="card"><b>${esc(c.subj)}</b> ${badge(c.status)}<br><span class="mu">${c.cat} - ${c.date}</span><p>${esc(c.desc)}</p>${c.resp?`<p><b>Response:</b> ${esc(c.resp)}</p>`:''}</div>`).join('')||'<div class="card mu">No complaints submitted.</div>'}`}
+  return `<div class="card"><table><tr><th>Subject</th><th>Student</th><th>Category</th><th>Status</th><th>Response</th><th></th></tr>${D.comps.map(c=>`<tr><td>${esc(c.subj)}<br><span class="mu">${esc(c.desc)}</span></td><td>${esc(stu(c.sid).name)}</td><td>${c.cat}</td><td>${badge(c.status)}</td><td>${esc(c.resp)}</td><td><button class="s" onclick="respond('${c.id}')">Respond</button></td></tr>`).join('')||'<tr><td colspan=6 class=mu>No complaints.</td></tr>'}</table></div>`;
+},
+waste(){
+  const e=estimate(tmp.date,tmp.meal),ex=D.waste.find(r=>r.date===tmp.date&&r.meal===tmp.meal),t=today();
+  const days=[13,12,11,10,9,8,7,6,5,4,3,2,1,0].map(n=>addDays(t,-n)),dayPct=days.map(d=>{const r=D.waste.filter(x=>x.date===d);return pct(sum(r.map(x=>x.left)),sum(r.map(x=>x.prep)))});
+  return `<div class="grid"><div class="card"><h3>Record meals</h3><div class="row"><label>Date<input type="date" value="${tmp.date}" max="${t}" onchange="tmp.date=this.value;go('waste')"></label>
+  <label>Meal<select onchange="tmp.meal=this.value;go('waste')">${MEALS.map(m=>`<option ${m===tmp.meal?'selected':''}>${m}</option>`).join('')}</select></label></div>
+  <div class="row"><label>Prepared<input id="wp" type="number" min="1" value="${ex?ex.prep:''}"></label><label>Served<input id="ws" type="number" min="0" value="${ex?ex.served:attCount(tmp.date,tmp.meal)||''}"></label><label>Leftover<input id="wl" type="number" min="0" value="${ex?ex.left:''}"></label></div>
+  <button onclick="saveWaste()">Save record</button> ${ex?'<span class="mu">Updates the existing record.</span>':''}</div>
+  <div class="card"><h3>Demand estimate <span class="b wa">Estimate</span></h3><p>Registered: <b>${e.reg}</b><br>Planned absences: <b>${e.abs}</b><br>Avg attendance (7 days): <b>${e.avg}</b><br>Expected meals: <b>${e.exp}</b></p><p><b>Suggested preparation: ${e.rec} meals</b><br><span class="mu">Attendance rate x students not absent, plus 5% buffer.</span></p></div></div><br>
+  <div class="card"><h3>Wastage % per day (estimated)</h3>${bars(days.map(d=>d.slice(5)),dayPct,'%')}</div>
+  <div class="card"><div class="row"><button class="l" onclick="csv('food-waste.csv',[['Date','Meal','Prepared','Served','Leftover','Wastage %'],...D.waste.map(r=>[r.date,r.meal,r.prep,r.served,r.left,Math.round(r.left*1000/r.prep)/10])])">Export CSV</button></div>
+  <table><tr><th>Date</th><th>Meal</th><th>Prepared</th><th>Served</th><th>Leftover</th><th>Wastage</th></tr>${[...D.waste].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,16).map(r=>`<tr><td>${r.date}</td><td>${r.meal}</td><td>${r.prep}</td><td>${r.served}</td><td>${r.left}</td><td>${pct(r.left,r.prep)}%</td></tr>`).join('')}</table></div>`;
+},
+abs(){
+  const mine=D.abs.filter(a=>a.sid===U.sid&&a.date>=today());
+  return `<div class="card"><h3>Skipping a meal? Tell the mess so less food is wasted.</h3><div class="row"><label>Date<input type="date" id="bd" min="${today()}" value="${addDays(today(),1)}"></label>
+  <label>Meal<select id="bm">${MEALS.map(m=>`<option>${m}</option>`).join('')}</select></label><button onclick="addAbs()">Save absence</button></div></div>
+  <div class="card"><h3>Upcoming</h3>${mine.map(a=>`<p>${a.date} - ${a.meal} <button class="d s" onclick="delAbs('${a.date}','${a.meal}')">Cancel</button></p>`).join('')||'<span class="mu">None planned.</span>'}</div>`;
+}};
+
+/* ---------------- actions ---------------- */
+function addStu(){const n=$('n').value.trim(),r=$('r').value.trim(),p=$('p').value.trim();
+  if(n.length<3)return toast('Enter the full name.');if(!r)return toast('Enter a room.');if(!/^\+?[0-9 ]{10,15}$/.test(p))return toast('Enter a valid phone number (10-15 digits).');
+  if(D.students.filter(s=>s.room===r).length>=6)return toast('Room '+r+' is full (6 beds).');
+  const id='S'+String(Math.max(0,...D.students.map(s=>+s.id.slice(1)))+1).padStart(3,'0');
+  D.students.push({id,name:n,dept:$('d').value,year:+$('y').value,room:r,phone:p});save();toast('Student added: '+id);go('students')}
+function delStu(id){if(!confirm('Remove '+stu(id).name+' and all linked records?'))return;D.students=D.students.filter(s=>s.id!==id);D.fees=D.fees.filter(f=>f.sid!==id);D.comps=D.comps.filter(c=>c.sid!==id);D.abs=D.abs.filter(a=>a.sid!==id);Object.keys(D.att).forEach(k=>D.att[k]=D.att[k].filter(x=>x!==id));save();go('students')}
+function editMenu(i,m){const v=prompt(DAYS[i]+' '+m+' menu:',D.menu[i][m]||'');if(v===null)return;if(v.trim().length<3)return toast('List at least one dish.');D.menu[i][m]=v.trim();save();go('menu')}
+function saveAtt(){if(tmp.date>today())return toast('Cannot mark a future date.');
+  const now=[...document.querySelectorAll('.pc:checked')].map(c=>c.value);D.att[tmp.date+'|'+tmp.meal]=now;save();toast(tmp.meal+' attendance saved: '+now.length+' present.')}
+function genFees(){const a=+$('fa').value;if(!(a>0))return toast('Enter a valid fee.');let n=0;
+  D.students.forEach(s=>{if(!D.fees.some(f=>f.sid===s.id&&f.month===tmp.month)){D.fees.push({id:'F'+Date.now()+s.id,sid:s.id,month:tmp.month,amt:a,pays:[]});n++}});save();toast(n+' fee record(s) created.');go('fees')}
+function pay(id){const f=D.fees.find(x=>x.id===id),bal=f.amt-paid(f),a=+prompt('Amount to record (balance Rs. '+bal+'). Simulated: never enter card or bank details.',bal);
+  if(!(a>0)||a>bal)return toast('Amount must be between 1 and '+bal+'.');f.pays.push({a,d:today(),ref:'REF'+Date.now().toString().slice(-8)});save();toast('Payment recorded.');go('fees')}
+function addComp(){const s=$('cs').value.trim(),d=$('cd').value.trim();if(s.length<3||d.length<10)return toast('Add a subject and a description of at least 10 characters.');
+  D.comps.unshift({id:'C'+Date.now(),sid:U.sid,cat:$('cc').value,subj:s,desc:d,status:'Open',resp:'',date:today()});save();toast('Complaint submitted.');go('comp')}
+function respond(id){const c=D.comps.find(x=>x.id===id),st=prompt('Status: Open, In Progress or Resolved',c.status);if(st===null)return;
+  if(!['Open','In Progress','Resolved'].includes(st))return toast('Use exactly: Open, In Progress or Resolved.');const r=prompt('Response:',c.resp)||'';
+  if(st==='Resolved'&&!r.trim())return toast('Add a response before resolving.');c.status=st;c.resp=r.trim();save();go('comp')}
+function saveWaste(){const p=+$('wp').value,s=+$('ws').value,l=+$('wl').value;if(!(p>=1))return toast('Enter meals prepared.');if(s>p||l>p||s<0||l<0)return toast('Served and leftover cannot exceed prepared.');
+  const r=D.waste.find(x=>x.date===tmp.date&&x.meal===tmp.meal);if(r)Object.assign(r,{prep:p,served:s,left:l});else D.waste.push({date:tmp.date,meal:tmp.meal,prep:p,served:s,left:l});save();toast('Saved: '+pct(l,p)+'% estimated wastage.');go('waste')}
+function addAbs(){const d=$('bd').value,m=$('bm').value;if(!d||d<today())return toast('Choose today or a future date.');
+  if(d===today()){const start={Breakfast:7.5,Lunch:12.5,Snacks:17,Dinner:19.5}[m],n=new Date();if(n.getHours()+n.getMinutes()/60>=start)return toast('Too late to skip today\'s '+m+'.')}
+  if(!D.abs.some(a=>a.sid===U.sid&&a.date===d&&a.meal===m))D.abs.push({sid:U.sid,date:d,meal:m});save();toast('Planned absence saved. Thank you!');go('abs')}
+function delAbs(d,m){D.abs=D.abs.filter(a=>!(a.sid===U.sid&&a.date===d&&a.meal===m));save();go('abs')}
+function doLogin(){const u=USERS.find(x=>x.u===$('lu').value.trim()&&x.p===$('lp').value);if(!u)return toast('Wrong username or password.');
+  U=u;sessionStorage.setItem('hmUser',JSON.stringify(u));page='dash';render()}
+function logout(){U=null;sessionStorage.removeItem('hmUser');render()}
+function resetData(){if(confirm('Reset all demo data?')){localStorage.removeItem(KEY);D=seed();render()}}
+function go(p){page=p;render()}
+
+function render(){
+  if(!U){$('app').innerHTML=`<div id="login"><div class="card"><h2 style="margin-top:0">Hostel Mess</h2><p class="mu">Sign in to manage meals, fees and feedback.</p>
+    <input id="lu" placeholder="Username" autofocus><input id="lp" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()"><button style="width:100%" onclick="doLogin()">Sign in</button>
+    <p class="mu" style="font-size:.82rem">Demo only: admin / admin123, staff / staff123, student / student123</p></div></div>`;return}
+  const nav=NAV[U.role];if(!nav.some(n=>n[0]===page))page='dash';
+  const focus=document.activeElement&&document.activeElement.id==='sq';
+  $('app').innerHTML=`<div id="side"><h2>Hostel Mess</h2>${nav.map(n=>`<a class="${n[0]===page?'on':''}" onclick="go('${n[0]}');$('side').classList.remove('open')">${n[1]}</a>`).join('')}</div>
+  <div id="main"><header><button class="l" id="menuBtn" onclick="$('side').classList.toggle('open')">Menu</button><h1>${nav.find(n=>n[0]===page)[1]}</h1><div class="r"><span>${esc(U.name)} <span class="b ok">${U.role}</span></span><button class="l s" onclick="resetData()">Reset demo</button><button class="l s" onclick="logout()">Log out</button></div></header><div id="c">${P[page]()}</div></div>`;
+  if(focus){const q=$('sq');q.focus();q.setSelectionRange(q.value.length,q.value.length)}
+}
+render();
+</script>
+</body>
+</html>

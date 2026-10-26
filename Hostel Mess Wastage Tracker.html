@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hostel Mess Wastage Tracker</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1a1d23;--mu:#6b7280;--bd:#e3e6eb;--ac:#0f766e;--bad:#dc2626;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111418;--card:#1b1f26;--tx:#e8eaee;--mu:#98a1b0;--bd:#2c323c;--ac:#2dd4bf;--bad:#f87171}}
+:root[data-theme="dark"]{--bg:#111418;--card:#1b1f26;--tx:#e8eaee;--mu:#98a1b0;--bd:#2c323c;--ac:#2dd4bf;--bad:#f87171}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.w{max-width:960px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:0 0 2px}.sub{color:var(--mu);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
+h2{font-size:1rem;margin:0 0 10px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.k{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px}
+.k b{display:block;font-size:1.4rem}.k span{color:var(--mu);font-size:.8rem}
+form{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+label{display:flex;flex-direction:column;font-size:.8rem;color:var(--mu);gap:3px}
+input,select,button{font:inherit;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--tx)}
+button{cursor:pointer;background:var(--ac);color:#fff;border:0;font-weight:600}
+button.g{background:transparent;color:var(--tx);border:1px solid var(--bd)}
+.full{grid-column:1/-1}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sc{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.85rem}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}
+th{color:var(--mu);font-weight:600}
+.bar{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:.85rem}
+.bar i{display:block;height:14px;background:var(--ac);border-radius:4px;min-width:2px}
+.bar em{width:90px;font-style:normal;color:var(--mu);flex:none}
+.bad{color:var(--bad);font-weight:600}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+</style>
+</head>
+<body>
+<div class="w">
+<h1>🍽️ Hostel Mess Wastage Tracker</h1>
+<p class="sub">Log what was cooked vs. what was thrown away. Data is saved in this browser.</p>
+
+<div class="kpis" id="kpis"></div>
+
+<div class="card">
+<h2>Add entry</h2>
+<form id="f">
+<label>Date<input type="date" id="date" required></label>
+<label>Meal<select id="meal"><option>Breakfast</option><option>Lunch</option><option>Snacks</option><option>Dinner</option></select></label>
+<label>Dish<input id="dish" placeholder="e.g. Rice" required></label>
+<label>Cooked (kg)<input type="number" id="cooked" min="0" step="0.1" required></label>
+<label>Wasted (kg)<input type="number" id="wasted" min="0" step="0.1" required></label>
+<label>Students ate<input type="number" id="stu" min="1" step="1" required></label>
+<label>Reason<select id="reason"><option>Over-cooked quantity</option><option>Poor taste/quality</option><option>Low attendance</option><option>Plate waste</option><option>Spoiled/leftover</option><option>Other</option></select></label>
+<label>&nbsp;<button type="submit">Add entry</button></label>
+</form>
+</div>
+
+<div class="grid2">
+<div class="card"><h2>Waste by meal (kg)</h2><div id="byMeal"></div></div>
+<div class="card"><h2>Top wasted dishes (kg)</h2><div id="byDish"></div></div>
+<div class="card"><h2>Waste by reason (kg)</h2><div id="byReason"></div></div>
+<div class="card"><h2>Last 7 days (kg)</h2><div id="byDay"></div></div>
+</div>
+
+<div class="card">
+<div class="row" style="justify-content:space-between;margin-bottom:10px">
+<h2 style="margin:0">Entries</h2>
+<div class="row">
+<select id="fm"><option value="">All meals</option><option>Breakfast</option><option>Lunch</option><option>Snacks</option><option>Dinner</option></select>
+<button class="g" id="csv">Export CSV</button>
+<button class="g" id="clr">Clear all</button>
+</div></div>
+<div class="sc"><table><thead><tr><th>Date</th><th>Meal</th><th>Dish</th><th>Cooked</th><th>Wasted</th><th>Waste %</th><th>g/student</th><th>Reason</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+</div>
+</div>
+
+<script>
+const KEY='messWaste.v1';
+let data=[];
+try{data=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){data=[]}
+const $=id=>document.getElementById(id);
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){}};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const f1=n=>(Math.round(n*10)/10).toFixed(1);
+$('date').value=new Date().toISOString().slice(0,10);
+
+function group(key){
+  const m={};
+  data.forEach(d=>{const k=d[key];m[k]=(m[k]||0)+d.wasted});
+  return Object.entries(m).sort((a,b)=>b[1]-a[1]);
+}
+function bars(id,arr){
+  const max=Math.max(...arr.map(a=>a[1]),0.0001);
+  $(id).innerHTML=arr.length?arr.map(([k,v])=>`<div class="bar"><em title="${esc(k)}">${esc(k)}</em><i style="width:${v/max*55}%"></i><span>${f1(v)}</span></div>`).join(''):'<span style="color:var(--mu)">No data yet</span>';
+}
+function render(){
+  const cooked=data.reduce((s,d)=>s+d.cooked,0),wasted=data.reduce((s,d)=>s+d.wasted,0);
+  const plates=data.reduce((s,d)=>s+d.stu,0);
+  const pct=cooked?wasted/cooked*100:0;
+  const gps=plates?wasted*1000/plates:0;
+  $('kpis').innerHTML=[['Total cooked',f1(cooked)+' kg'],['Total wasted',f1(wasted)+' kg'],['Waste %',f1(pct)+'%'],['Avg g / student',Math.round(gps)+' g'],['Entries',data.length]].map(([a,b])=>`<div class="k"><b>${b}</b><span>${a}</span></div>`).join('');
+  bars('byMeal',group('meal'));
+  bars('byDish',group('dish').slice(0,6));
+  bars('byReason',group('reason'));
+  const days=[];
+  for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);days.push(d.toISOString().slice(0,10))}
+  bars('byDay',days.map(d=>[d.slice(5),data.filter(x=>x.date===d).reduce((s,x)=>s+x.wasted,0)]));
+  const fm=$('fm').value;
+  const list=data.map((d,i)=>({...d,i})).filter(d=>!fm||d.meal===fm).sort((a,b)=>b.date.localeCompare(a.date));
+  $('rows').innerHTML=list.length?list.map(d=>{const p=d.cooked?d.wasted/d.cooked*100:0;return `<tr><td>${d.date}</td><td>${d.meal}</td><td>${esc(d.dish)}</td><td>${f1(d.cooked)} kg</td><td>${f1(d.wasted)} kg</td><td class="${p>20?'bad':''}">${f1(p)}%</td><td>${Math.round(d.wasted*1000/d.stu)}</td><td>${esc(d.reason)}</td><td><button class="g" data-i="${d.i}">✕</button></td></tr>`}).join(''):'<tr><td colspan="9" style="color:var(--mu)">No entries yet</td></tr>';
+}
+$('f').addEventListener('submit',e=>{
+  e.preventDefault();
+  const cooked=+$('cooked').value,wasted=+$('wasted').value;
+  if(wasted>cooked){alert('Wasted cannot exceed cooked quantity.');return}
+  data.push({date:$('date').value,meal:$('meal').value,dish:$('dish').value.trim(),cooked,wasted,stu:+$('stu').value,reason:$('reason').value});
+  save();$('dish').value='';$('cooked').value='';$('wasted').value='';render();
+});
+$('rows').addEventListener('click',e=>{const b=e.target.closest('button[data-i]');if(!b)return;data.splice(+b.dataset.i,1);save();render()});
+$('fm').addEventListener('change',render);
+$('clr').addEventListener('click',()=>{if(data.length&&confirm('Delete all entries?')){data=[];save();render()}});
+$('csv').addEventListener('click',()=>{
+  const h='date,meal,dish,cooked_kg,wasted_kg,students,reason\n';
+  const body=data.map(d=>[d.date,d.meal,'"'+d.dish.replace(/"/g,'""')+'"',d.cooked,d.wasted,d.stu,d.reason].join(',')).join('\n');
+  const w=window.open('','_blank');
+  if(w){w.document.write('<pre>'+esc(h+body)+'</pre>');w.document.title='mess_wastage.csv'}
+  else alert('Popup blocked. Allow popups to view the CSV text, then copy it.');
+});
+render();
+</script>
+</body>
+</html>
